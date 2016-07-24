@@ -1,12 +1,12 @@
-package io.github.maxkorolev
+package io.github.maxkorolev.base
 
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus
 import net.ceedubs.ficus.readers.ArbitraryTypeReader
 
 trait Config {
-  import Ficus._
   import ArbitraryTypeReader._
+  import Ficus._
 
   protected case class HttpConfig(interface: String, port: Int)
 

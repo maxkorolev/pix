@@ -1,4 +1,4 @@
-package io.github.maxkorolev
+package io.github.maxkorolev.base
 
 import akka.event.LoggingAdapter
 

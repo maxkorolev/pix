@@ -1,10 +1,11 @@
-package io.github.maxkorolev
+package io.github.maxkorolev.base
 
 import akka.actor.ActorSystem
 import akka.event.Logging
-import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
-import akka.http.scaladsl.server.Directives
+
+import akka.http.scaladsl.Http
+import io.github.maxkorolev.status.StatusService
 
 object System {
   implicit val system = ActorSystem()
@@ -18,7 +19,6 @@ object System {
 
 object Main extends App with Config with System.LoggerExecutor with StatusService {
   import System._
-  import Directives._
 
   Http().bindAndHandle(statusRoutes, httpConfig.interface, httpConfig.port)
 }

@@ -1,7 +1,10 @@
-package io.github.maxkorolev
+package io.github.maxkorolev.status
 
 import java.lang.management.ManagementFactory
+
 import akka.http.scaladsl.server.Directives._
+import io.github.maxkorolev.base.BaseService
+
 import scala.concurrent.duration._
 
 trait StatusService extends BaseService {
