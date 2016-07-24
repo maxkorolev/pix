@@ -8,7 +8,7 @@ resolvers += Resolver.jcenterRepo
 
 libraryDependencies ++= {
   val scalazV          = "7.3.0-M2"
-  val akkaV            = "2.4.7"
+  val akkaV            = "2.4.8"
   val ficusV           = "1.2.4"
   val scalaTestV       = "3.0.0-M15"
   val scalaMockV       = "3.2.2"
@@ -18,6 +18,9 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-http-core"                    % akkaV,
     "com.typesafe.akka" %% "akka-http-experimental"            % akkaV,
     "com.typesafe.akka" %% "akka-http-spray-json-experimental" % akkaV,
+    "com.typesafe.akka" %% "akka-persistence"                  % akkaV,
+    "org.iq80.leveldb"  % "leveldb"                            % "0.7",
+    "org.fusesource.leveldbjni" % "leveldbjni-all"             % "1.8",
     "com.iheart"        %% "ficus"                             % ficusV,
     "org.scalatest"     %% "scalatest"                         % scalaTestV       % "it,test",
     "org.scalamock"     %% "scalamock-scalatest-support"       % scalaMockV       % "it,test",
