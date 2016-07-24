@@ -1,5 +1,5 @@
 name          := "minimal-scala-akka-http-seed"
-organization  := "com.github.yeghishe"
+organization  := "com.github.maxkorolev"
 version       := "0.0.1"
 scalaVersion  := "2.11.8"
 scalacOptions := Seq("-unchecked", "-feature", "-deprecation", "-encoding", "utf8")
@@ -51,7 +51,7 @@ publishTo := {
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
 pomExtra := (
-  <url>http://yeghishe.github.io/</url>
+  <url>http://maxkorolev.github.io/</url>
   <licenses>
     <license>
       <name>Apache-2.0</name>
@@ -60,13 +60,13 @@ pomExtra := (
     </license>
   </licenses>
   <scm>
-    <url>https://github.com/yeghishe/</url>
-    <connection>scm:git:git@github.com:yeghishe/.git</connection>
+    <url>https://github.com/maxkorolev/</url>
+    <connection>scm:git:git@github.com:maxkorolev/.git</connection>
   </scm>
   <developers>
     <developer>
       <id>ypiruzyan</id>
       <name>Yeghishe Piruzyan</name>
-      <url>http://yeghishe.github.io/</url>
+      <url>http://maxkorolev.github.io/</url>
     </developer>
   </developers>)
