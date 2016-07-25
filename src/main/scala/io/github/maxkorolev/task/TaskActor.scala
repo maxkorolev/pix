@@ -1,14 +1,17 @@
 package io.github.maxkorolev.task
 
+import java.util.concurrent.Callable
+
 import akka.actor.ActorLogging
 import akka.persistence.{ PersistentActor, SnapshotOffer }
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 object TaskActor {
 
   trait Command
-  case object Wait extends Command
+  case class Wait(time: Long) extends Command
   case object Awake extends Command
   case object Finish extends Command
   case class Cancel(err: String) extends Command
@@ -27,17 +30,24 @@ object TaskActor {
 
 }
 
-class TaskActor[T](time: Long, task: => T) extends PersistentActor with ActorLogging {
+class TaskActor[T](name: String, callable: Callable[T]) extends PersistentActor with ActorLogging {
 
   import TaskActor._
   import akka.pattern.pipe
   import context.dispatcher
 
-  override def persistenceId: String = s"task-${time.toString}"
+  override def persistenceId: String = name
 
   var state = TaskState()
 
-  def updateState(event: Event): Unit = state = state.updated(event)
+  def updateState(event: Event): Unit = {
+    state = state.updated(event)
+  }
+
+  def updateSnapshot(event: Event): Unit = {
+    updateState(event)
+    saveSnapshot(state)
+  }
 
   val receiveRecover: Receive = {
     case event: Event => updateState(event)
@@ -45,18 +55,20 @@ class TaskActor[T](time: Long, task: => T) extends PersistentActor with ActorLog
   }
 
   val receiveCommand: Receive = {
-    case Wait =>
+    case Wait(time) =>
+      val period = time - System.currentTimeMillis
+      context.system.scheduler.scheduleOnce(period.millis, self, Awake)
       persist(Waiting)(updateState)
 
     case Awake =>
-      Future { task } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo sender
+      Future { callable.call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
       persist(Executing)(updateState)
 
     case Finish =>
-      persist(Done)(updateState)
+      persist(Done)(updateSnapshot)
 
     case Cancel(err) =>
-      persist(Canceled(err))(updateState)
+      persist(Canceled(err))(updateSnapshot)
   }
 }
 
