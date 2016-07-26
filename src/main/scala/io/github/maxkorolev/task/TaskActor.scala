@@ -3,7 +3,7 @@ package io.github.maxkorolev.task
 import java.util.concurrent.Callable
 
 import akka.actor.ActorLogging
-import akka.persistence.{ PersistentActor, SnapshotOffer }
+import akka.persistence.{ PersistentActor, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -30,7 +30,7 @@ object TaskActor {
 
 }
 
-class TaskActor[T](name: String, callable: Callable[T]) extends PersistentActor with ActorLogging {
+class TaskActor[T](name: String, callable: Callable[Any]) extends PersistentActor with ActorLogging {
 
   import TaskActor._
   import akka.pattern.pipe
@@ -57,18 +57,29 @@ class TaskActor[T](name: String, callable: Callable[T]) extends PersistentActor 
   val receiveCommand: Receive = {
     case Wait(time) =>
       val period = time - System.currentTimeMillis
+      log info s"Task will be executed in a ${period / 1000} seconds"
       context.system.scheduler.scheduleOnce(period.millis, self, Awake)
       persist(Waiting)(updateState)
 
     case Awake =>
-      Future { callable.call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
+      log info s"Task will be executed now"
+      Future { callable.asInstanceOf[Callable[T]].call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
       persist(Executing)(updateState)
 
     case Finish =>
+      log info s"Task has been finished successful"
       persist(Done)(updateSnapshot)
 
     case Cancel(err) =>
+      log info s"Task has been canceled because of $err"
       persist(Canceled(err))(updateSnapshot)
+
+    case SaveSnapshotSuccess(_) =>
+      context stop self
+
+    case SaveSnapshotFailure(metadata, reason) =>
+      log info s"Snapshot couldn't be stored because of ${reason.getMessage}"
+      context stop self
   }
 }
 

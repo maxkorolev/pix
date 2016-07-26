@@ -1,11 +1,10 @@
 package io.github.maxkorolev.base
 
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, Props }
 import akka.event.Logging
 import akka.stream.ActorMaterializer
-
 import akka.http.scaladsl.Http
-import io.github.maxkorolev.status.StatusService
+import io.github.maxkorolev.task.{ TaskManager, TaskService }
 
 object System {
   implicit val system = ActorSystem()
@@ -15,10 +14,14 @@ object System {
     protected implicit val executor = system.dispatcher
     protected implicit val log = Logging(system, "app")
   }
+
+  trait TaskExecutor extends BaseComponent {
+    protected implicit val taskManager = system.actorOf(Props(new TaskManager[String]))
+  }
 }
 
-object Main extends App with Config with System.LoggerExecutor with StatusService {
+object Main extends App with Config with System.LoggerExecutor with System.TaskExecutor with TaskService {
   import System._
 
-  Http().bindAndHandle(statusRoutes, httpConfig.interface, httpConfig.port)
+  Http().bindAndHandle(taskRoutes, httpConfig.interface, httpConfig.port)
 }

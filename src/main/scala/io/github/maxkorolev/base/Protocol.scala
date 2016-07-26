@@ -1,8 +1,8 @@
 package io.github.maxkorolev.base
 
-import io.github.maxkorolev.status.Status
+import io.github.maxkorolev.task.TaskInput
 import spray.json.DefaultJsonProtocol
 
 trait Protocol extends DefaultJsonProtocol {
-  implicit val statusFormatter = jsonFormat1(Status.apply)
+  implicit val taskInputFormatter = jsonFormat1(TaskInput.apply)
 }
