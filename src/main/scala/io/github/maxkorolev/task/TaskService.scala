@@ -6,7 +6,7 @@ import java.util.concurrent.Callable
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import io.github.maxkorolev.base.BaseService
-import io.github.maxkorolev.task.TaskManager.Task
+import io.github.maxkorolev.task.TaskManager.AddTask
 
 import scala.concurrent.duration._
 
@@ -22,11 +22,8 @@ trait TaskService extends BaseService {
 
           val time = Instant.ofEpochMilli(in.time).atZone(ZoneId.systemDefault()).toLocalDateTime
 
-          taskManager ! Task(time, new Callable[Int] {
-            override def call(): Int = {
-              throw new RuntimeException("----------------")
-              5
-            }
+          taskManager ! AddTask(time, new Callable[Any] {
+            override def call(): Any = ()
           })
 
           complete(StatusCodes.OK)

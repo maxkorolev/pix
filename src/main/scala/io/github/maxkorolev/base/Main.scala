@@ -16,7 +16,7 @@ object System {
   }
 
   trait TaskExecutor extends BaseComponent {
-    protected implicit val taskManager = system.actorOf(Props(new TaskManager[String]))
+    protected implicit val taskManager = system.actorOf(Props(new TaskManager), "task_manager")
   }
 }
 

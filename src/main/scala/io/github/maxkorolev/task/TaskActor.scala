@@ -1,8 +1,9 @@
 package io.github.maxkorolev.task
 
+import java.time.{ Instant, ZoneId }
 import java.util.concurrent.Callable
 
-import akka.actor.ActorLogging
+import akka.actor.{ ActorLogging, ActorRef, ReceiveTimeout }
 import akka.persistence.{ PersistentActor, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 
 import scala.concurrent.Future
@@ -11,7 +12,7 @@ import scala.concurrent.duration._
 object TaskActor {
 
   trait Command
-  case class Wait(time: Long) extends Command
+  case object Wait extends Command
   case object Awake extends Command
   case object Finish extends Command
   case class Cancel(err: String) extends Command
@@ -24,14 +25,11 @@ object TaskActor {
 
   case class TaskState(events: List[Event] = Nil) {
     def updated(event: Event): TaskState = copy(event :: events)
-    def size: Int = events.length
     override def toString: String = events.reverse.toString
   }
-
 }
 
-class TaskActor[T](name: String, callable: Callable[Any]) extends PersistentActor with ActorLogging {
-
+class TaskActor(time: Long, name: String, callable: Callable[Any], timeout: FiniteDuration) extends PersistentActor with ActorLogging {
   import TaskActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -46,6 +44,7 @@ class TaskActor[T](name: String, callable: Callable[Any]) extends PersistentActo
 
   def updateSnapshot(event: Event): Unit = {
     updateState(event)
+    context.parent ! event
     saveSnapshot(state)
   }
 
@@ -55,15 +54,15 @@ class TaskActor[T](name: String, callable: Callable[Any]) extends PersistentActo
   }
 
   val receiveCommand: Receive = {
-    case Wait(time) =>
-      val period = time - System.currentTimeMillis
-      log info s"Task will be executed in a ${period / 1000} seconds"
-      context.system.scheduler.scheduleOnce(period.millis, self, Awake)
+    case Wait =>
+      val datetime = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()).formatted("MM dd yyyy hh:mm:ss")
+      log info s"Task will be executed in a $datetime"
       persist(Waiting)(updateState)
 
     case Awake =>
       log info s"Task will be executed now"
-      Future { callable.asInstanceOf[Callable[T]].call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
+      context setReceiveTimeout timeout
+      Future { callable.call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
       persist(Executing)(updateState)
 
     case Finish =>
@@ -73,6 +72,10 @@ class TaskActor[T](name: String, callable: Callable[Any]) extends PersistentActo
     case Cancel(err) =>
       log info s"Task has been canceled because of $err"
       persist(Canceled(err))(updateSnapshot)
+
+    case ReceiveTimeout =>
+      log info s"Task has been canceled because of timeout"
+      persist(Canceled("Timeout"))(updateSnapshot)
 
     case SaveSnapshotSuccess(_) =>
       context stop self
