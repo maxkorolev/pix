@@ -19,6 +19,7 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-http-experimental"            % akkaV,
     "com.typesafe.akka" %% "akka-http-spray-json-experimental" % akkaV,
     "com.typesafe.akka" %% "akka-persistence"                  % akkaV,
+    "com.github.dnvriend" %% "akka-persistence-inmemory"       % "1.3.5",
     "org.iq80.leveldb"  % "leveldb"                            % "0.7",
     "org.fusesource.leveldbjni" % "leveldbjni-all"             % "1.8",
     "com.iheart"        %% "ficus"                             % ficusV,
@@ -48,10 +49,12 @@ publishArtifact in Test := false
 pomIncludeRepository := { _ => false }
 publishTo := {
   val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
+  if (isSnapshot.value) {
     Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+  }
+  else {
+    Some("releases" at nexus + "service/local/staging/deploy/maven2")
+  }
 }
 pomExtra := (
   <url>http://maxkorolev.github.io/</url>
