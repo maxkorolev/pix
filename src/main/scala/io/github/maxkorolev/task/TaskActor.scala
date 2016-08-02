@@ -1,9 +1,10 @@
 package io.github.maxkorolev.task
 
+import java.time.format.DateTimeFormatter
 import java.time.{ Instant, ZoneId }
 import java.util.concurrent.Callable
 
-import akka.actor.{ ActorLogging, ActorRef, ReceiveTimeout }
+import akka.actor.{ ActorLogging, ActorRef, Props, ReceiveTimeout }
 import akka.persistence.{ PersistentActor, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
 
 import scala.concurrent.Future
@@ -27,9 +28,11 @@ object TaskActor {
     def updated(event: Event): TaskState = copy(event :: events)
     override def toString: String = events.reverse.toString
   }
+
+  def props(task: Task, name: String): Props = Props(new TaskActor(task.time, name, task.call, task.timeout))
 }
 
-class TaskActor(time: Long, name: String, callable: Callable[Any], timeout: FiniteDuration) extends PersistentActor with ActorLogging {
+class TaskActor(time: Long, name: String, call: () => Any, timeout: FiniteDuration) extends PersistentActor with ActorLogging {
   import TaskActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -55,14 +58,15 @@ class TaskActor(time: Long, name: String, callable: Callable[Any], timeout: Fini
 
   val receiveCommand: Receive = {
     case Wait =>
-      val datetime = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault()).formatted("MM dd yyyy hh:mm:ss")
-      log info s"Task will be executed in a $datetime"
+      val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+      val datetime = Instant.ofEpochMilli(time).atZone(ZoneId.systemDefault())
+      log info s"Task will be executed in a ${datetime format formatter}"
       persist(Waiting)(updateState)
 
     case Awake =>
       log info s"Task will be executed now"
       context setReceiveTimeout timeout
-      Future { callable.call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
+      Future { call() } map { _ => Finish } recover { case err => Cancel(err.getMessage) } pipeTo self
       persist(Executing)(updateState)
 
     case Finish =>

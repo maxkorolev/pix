@@ -1,48 +1,32 @@
 package io.github.maxkorolev.task
 
-import java.time._
-import java.util.concurrent.Callable
-
-import akka.actor.{ Actor, ActorLogging, ActorRef, Cancellable, Props }
+import akka.actor.{ ActorLogging, ActorRef, Cancellable, Props }
 import akka.persistence.{ PersistentActor, RecoveryCompleted, SnapshotOffer }
 import io.github.maxkorolev.task.TaskActor.{ Awake, Canceled, Done, Wait }
 
-import scala.collection.immutable.TreeSet
+import scala.collection.immutable.TreeMap
 import scala.concurrent.duration._
 
 object TaskManager {
 
   sealed trait Event
 
-  case class TaskAdded(time: Long) extends Event
-  case class TaskRun(time: Long) extends Event
+  case class TaskPushed(task: Task) extends Event
+  case class TaskPulled(task: Task) extends Event
 
   case class StartRunning(actorRef: ActorRef) extends Event
   case object StopRunning extends Event
 
-  case class StartWaiting(cancellable: Cancellable) extends Event
-  case object StopWaiting extends Event
-
   sealed trait Command
-  case class AddTask(time: LocalDateTime, callable: Callable[Any], timeout: FiniteDuration = 10.seconds) extends Command
-  case class RunTask(time: Long) extends Command
+  case class PushTask(task: Task) extends Command
+  case class PullTask(task: Task) extends Command
 
   case class TaskManagerState(
-      tasks: TreeSet[Long] = TreeSet(),
-      running: Option[ActorRef] = None,
-      waiting: Option[Cancellable] = None
-  ) {
-    def pushTask(task: Long): TaskManagerState = copy(tasks = tasks + task)
-    def pullTask(task: Long): TaskManagerState = copy(tasks = tasks - task)
+    tasks: TreeMap[Long, Task] = TreeMap(),
+    running: Option[ActorRef] = None,
+    waiting: Option[Cancellable] = None
+  )
 
-    def startRunning(actorRef: ActorRef): TaskManagerState = copy(running = Some(actorRef))
-    def stopRunning: TaskManagerState = copy(running = None)
-
-    def startWaiting(cancellable: Cancellable): TaskManagerState = copy(waiting = Some(cancellable))
-    def stopWaiting: TaskManagerState = copy(waiting = None)
-
-    override def toString: String = tasks.toString
-  }
 }
 
 class TaskManager extends PersistentActor with ActorLogging {
@@ -55,66 +39,90 @@ class TaskManager extends PersistentActor with ActorLogging {
 
   def taskActorName(time: Long): String = s"task-${time.toString}"
 
+  def pushTaskState(task: Task): Unit = state = state.copy(tasks = state.tasks + (task.time -> task))
+  def pullTaskState(task: Task): Unit = state = state.copy(tasks = state.tasks - task.time)
+
+  def startRunningState(actorRef: ActorRef): Unit = state = state.copy(running = Some(actorRef))
+  def stopRunningState(): Unit = state = state.copy(running = None)
+
+  def startWaitingState(waiting: Cancellable): Unit = state = state.copy(waiting = Some(waiting))
+  def stopWaitingState(): Unit = state = state.copy(waiting = None)
+
   val receiveRecover: Receive = {
-    case event: Long => state = state.pushTask(event)
+    case TaskPushed(task) => pushTaskState(task)
+    case TaskPulled(task) => pullTaskState(task)
+    case StartRunning(actorRef) => startRunningState(actorRef)
+    case StopRunning => stopRunningState()
     case SnapshotOffer(_, snapshot: TaskManagerState) => state = snapshot
+    case RecoveryCompleted =>
+      log info s"RecoveryCompleted ${state.toString}"
+      scheduleFirst()
   }
 
   val receiveCommand: Receive = {
-    case AddTask(time, callable, timeout) => addTask(time, callable, timeout)
-    case RunTask(time) => runTask(time)
-    case Done => finishTask()
-    case Canceled(_) => finishTask()
-    case RecoveryCompleted => ()
+    case PushTask(task) => addTask(task)
+    case PullTask(time) => runTask(time)
+    case Done =>
+      stopRunningState()
+      persist(StopRunning) { _ => () }
+      log info s"StopRunning $state"
+      scheduleFirst()
+    case Canceled(_) =>
+      stopRunningState()
+      persist(StopRunning) { _ => () }
+      log info s"StopRunning ${state.toString}"
+      scheduleFirst()
   }
 
-  def addTask(time: LocalDateTime, callable: Callable[Any], timeout: FiniteDuration): Unit = {
-    OffsetDateTime.now().toInstant.toEpochMilli
-    addTask(time.atZone(ZoneId.systemDefault()).toInstant.toEpochMilli, callable, timeout)
-  }
-
-  def addTask(time: Long, callable: Callable[Any], timeout: FiniteDuration): Unit = {
-    if (state.tasks.contains(time)) {
-      addTask(time + 1, callable, timeout)
+  def addTask(task: Task): Unit = {
+    if (state.tasks.contains(task.time)) {
+      addTask(task.withTime(task.time + 1))
     } else {
-      context.actorOf(Props(new TaskActor(time, taskActorName(time), callable, timeout)), taskActorName(time)) ! Wait
-      scheduleTask(time)
+      context.actorOf(TaskActor.props(task, taskActorName(task.time)), taskActorName(task.time)) ! Wait
+      scheduleTask(task)
     }
   }
 
-  def scheduleTask(task: Long): Unit = {
-    state match {
-      case TaskManagerState(tasks, None, Some(waiting)) if tasks.head > task =>
+  def scheduleTask(task: Task): Unit = {
+    state -> state.tasks.headOption match {
+      case (TaskManagerState(tasks, None, Some(waiting)), Some(head)) if head._1 > task.time =>
         waiting.cancel()
-        state = state.stopWaiting
-        state = state pushTask task
+        stopWaitingState()
+        pushTaskState(task)
+        persist(TaskPushed(task)) { _ => () }
+        log info s"TaskPushed ${state.toString}"
         scheduleFirst()
-      case _ =>
-        state = state pushTask task
+      case (TaskManagerState(tasks, _, _), _) =>
+        pushTaskState(task)
+        persist(TaskPushed(task)) { _ => () }
+        log info s"TaskPushed ${state.toString}"
+        scheduleFirst()
+      case _ => ()
     }
   }
 
   def scheduleFirst(): Unit = {
-    if (state.tasks.nonEmpty) {
-      val period = state.tasks.head - System.currentTimeMillis
-      val cancellable = context.system.scheduler.scheduleOnce(period.millis, self, RunTask(state.tasks.head))
-      state = state startWaiting cancellable
+    state -> state.tasks.headOption match {
+      case (TaskManagerState(tasks, None, None), Some(head)) =>
+        val (time, task) = head
+        val period = time - System.currentTimeMillis
+        val cancellable = context.system.scheduler.scheduleOnce(period.millis, self, PullTask(task))
+        startWaitingState(cancellable)
+      case _ => ()
     }
   }
 
-  def runTask(task: Long): Unit = {
-    state = state pullTask task
-    context child taskActorName(task) match {
-      case Some(actorRef) =>
-        actorRef ! Awake
-        state = state startRunning actorRef
-      case None =>
-        scheduleFirst()
+  def runTask(task: Task): Unit = {
+    val actorRef = context child taskActorName(task.time) getOrElse {
+      context.actorOf(TaskActor.props(task, taskActorName(task.time)), taskActorName(task.time))
     }
-  }
-
-  def finishTask(): Unit = {
-    state = state.stopRunning
+    actorRef ! Awake
+    pullTaskState(task)
+    stopWaitingState()
+    startRunningState(actorRef)
+    persist(StartRunning) { _ => () }
+    persist(TaskPulled(task)) { _ => () }
+    log info s"TaskPulled ${state.toString}"
   }
 
 }
