@@ -15,6 +15,21 @@ trait Task extends Callable[Any] with Serializable {
     override def call(): AnyRef = call _
   }
 
+  override def equals(any: Any): Boolean = {
+    any match {
+      case t: Task => time == t.time && timeout == t.timeout
+      case _ => false
+    }
+  }
+
+  override def hashCode: Int = {
+    val prime = 31
+    var result = 1
+    result = prime * result + time.toInt
+    result = prime * result + timeout.hashCode()
+    result
+  }
+
   override def toString: String = s"Task(time: $time, timeout: ${timeout.toString})"
 }
 

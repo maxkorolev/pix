@@ -7,7 +7,7 @@ import io.github.maxkorolev.task.{ Task, TaskActor }
 
 import scala.concurrent.duration._
 
-class TaskActorTest extends ServiceTestBase {
+class TaskActorTest extends TestBase {
 
   def createActor(task: Task): ActorRef = system.actorOf(TaskActor.props(task, s"time-${task.time}"), s"time-${task.time}")
 

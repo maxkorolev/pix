@@ -20,6 +20,7 @@ object TaskManager {
   sealed trait Command
   case class PushTask(task: Task) extends Command
   case class PullTask(task: Task) extends Command
+  case object GetState extends Command
 
   case class TaskManagerState(
     tasks: TreeMap[Long, Task] = TreeMap(),
@@ -37,7 +38,7 @@ class TaskManager extends PersistentActor with ActorLogging {
 
   var state = TaskManagerState()
 
-  def taskActorName(time: Long): String = s"task-${time.toString}"
+  def taskActorName(time: Long): String = s"task-$time"
 
   def pushTaskState(task: Task): Unit = state = state.copy(tasks = state.tasks + (task.time -> task))
   def pullTaskState(task: Task): Unit = state = state.copy(tasks = state.tasks - task.time)
@@ -55,7 +56,7 @@ class TaskManager extends PersistentActor with ActorLogging {
     case StopRunning => stopRunningState()
     case SnapshotOffer(_, snapshot: TaskManagerState) => state = snapshot
     case RecoveryCompleted =>
-      log info s"RecoveryCompleted ${state.toString}"
+      log info s"RecoveryCompleted $state"
       scheduleFirst()
   }
 
@@ -70,8 +71,10 @@ class TaskManager extends PersistentActor with ActorLogging {
     case Canceled(_) =>
       stopRunningState()
       persist(StopRunning) { _ => () }
-      log info s"StopRunning ${state.toString}"
+      log info s"StopRunning $state"
       scheduleFirst()
+    case GetState =>
+      sender ! state
   }
 
   def addTask(task: Task): Unit = {
@@ -90,12 +93,12 @@ class TaskManager extends PersistentActor with ActorLogging {
         stopWaitingState()
         pushTaskState(task)
         persist(TaskPushed(task)) { _ => () }
-        log info s"TaskPushed ${state.toString}"
+        log info s"TaskPushed $state"
         scheduleFirst()
       case (TaskManagerState(tasks, _, _), _) =>
         pushTaskState(task)
         persist(TaskPushed(task)) { _ => () }
-        log info s"TaskPushed ${state.toString}"
+        log info s"TaskPushed $state"
         scheduleFirst()
       case _ => ()
     }
@@ -122,7 +125,7 @@ class TaskManager extends PersistentActor with ActorLogging {
     startRunningState(actorRef)
     persist(StartRunning) { _ => () }
     persist(TaskPulled(task)) { _ => () }
-    log info s"TaskPulled ${state.toString}"
+    log info s"TaskPulled $state"
   }
 
 }

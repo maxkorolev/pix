@@ -1,6 +1,6 @@
 package io.github.maxkorolev
 
-object ServiceTestConfig {
+object TestConfig {
   val config =
     """
       akka {

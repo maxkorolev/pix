@@ -13,7 +13,7 @@ object TaskFactoryUtil {
     time.atZone(ZoneId.systemDefault()).toInstant.toEpochMilli
   }
 
-  def successTask(seconds: Long): Task = new Task {
+  def successTask(seconds: Long, cb: => Unit = () => ()): Task = new Task {
     val time = exactMillis(seconds)
     val timeout = 10.seconds
     override def call(): Any = {

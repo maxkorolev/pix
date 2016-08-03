@@ -5,7 +5,7 @@ import java.time.{ Instant, ZoneId }
 import java.util.concurrent.Callable
 
 import akka.actor.{ ActorLogging, ActorRef, Props, ReceiveTimeout }
-import akka.persistence.{ PersistentActor, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer }
+import akka.persistence._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -107,6 +107,8 @@ class TaskActor(time: Long, name: String, call: () => Any, timeout: FiniteDurati
   val receiveRecover: Receive = {
     case event: Event => updateState(event)
     case SnapshotOffer(_, snapshot: TaskState) => state = snapshot
+    case RecoveryCompleted if state.events.nonEmpty && state.events.last == Waiting =>
+      context become sleeping
   }
 }
 
