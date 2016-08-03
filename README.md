@@ -1,5 +1,5 @@
-Simple task manager on akka persistence
-=======================================
+Pix
+===
 
 Just naive implementation of task manager on akka persistence
 

@@ -1,4 +1,4 @@
-name          := "minimal-scala-akka-http-seed"
+name          := "pix"
 organization  := "com.github.maxkorolev"
 version       := "0.0.1"
 scalaVersion  := "2.11.8"
