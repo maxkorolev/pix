@@ -31,3 +31,6 @@ root [INFO] [08/03/2016 16:43:32.064] [default-akka.actor.default-dispatcher-10]
 root [INFO] [08/03/2016 16:43:35.076] [default-akka.actor.default-dispatcher-10] [akka://default/user/task_manager/task-1470231812034] Task has been finished successful
 root [INFO] [08/03/2016 16:43:35.079] [default-akka.actor.default-dispatcher-2] [akka://default/user/task_manager] StopRunning TaskManagerState(Map(),None,None)
 ```
+
+## Task description (Russian)
+На вход поступают пары (DateTime, Callable). Нужно реализовать систему, которая будет выполнять Callable для каждого пришедшего события в указанный DateTime, либо как можно скорее в случае если система перегружена и не успевает все выполнять (имеет беклог). Задачи должны выполняться в порядке согласно значению DateTime либо в порядке прихода события для равных DateTime. События могут приходить в произвольном порядке и добавление новых пар (DateTime, Callable) может вызываться из разных потоков.
